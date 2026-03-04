@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Nível Profundo — Edição Hi-Fi Cinemática</title>
+  <style>
+    :root {
+      /* Paleta Visualizador e UI Premium */
+      --glass-bg: rgba(10, 10, 15, 0.45);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --metal-light: #3a3a40; 
+      --metal-dark: #18181a;
+      --accent: #00e5ff; /* Ciano tecnológico mais brilhante */
+      --accent-purple: #b100ff;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      margin: 0; height: 100vh; overflow: hidden;
+      background-color: #000;
+      color: #eadcff;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+
+    /* === VÍDEO BACKGROUND CINEMÁTICO === */
+    #bg-video {
+      position: fixed; top: 50%; left: 50%;
+      min-width: 100vw; min-height: 100vh;
+      width: auto; height: auto;
+      transform: translate(-50%, -50%);
+      z-index: -3;
+      object-fit: cover;
+      opacity: 0.8; /* Leve transparência para blend com o fundo escuro */
+    }
+
+    /* OVERLAY DE VIDRO FOSCO (Profundidade e Contraste) */
+    #video-overlay {
+      position: fixed; inset: 0; z-index: -2;
+      background: radial-gradient(circle at center, rgba(5,5,10,0.4) 0%, rgba(2,1,5,0.85) 100%);
+      backdrop-filter: blur(12px); /* Efeito de lente desfocada no vídeo */
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+
+    /* HUD Topo */
+    .hud-top {
+      position: fixed; left: 24px; right: 24px; top: 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 10; pointer-events: none;
+    }
+
+    .title {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .2em; font-size: 10px; font-weight: 700;
+      opacity: .9; text-transform: uppercase;
+      color: #fff;
+      text-shadow: 0 0 10px var(--accent);
+    }
+
+    /* PREMIUM PLAYER DOCK */
+    .premium-dock {
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+      z-index: 20; display: flex; align-items: center; gap: 24px;
+      padding: 16px 32px; border-radius: 50px;
+      
+      background: var(--glass-bg);
+      backdrop-filter: blur(30px) saturate(150%);
+      -webkit-backdrop-filter: blur(30px) saturate(150%);
+      border: 1px solid var(--glass-border);
+      box-shadow: 
+        0 30px 60px rgba(0,0,0,0.8), 
+        inset 0 1px 0 rgba(255,255,255,0.15),
+        inset 0 -1px 0 rgba(0,0,0,0.5),
+        0 0 30px rgba(0, 229, 255, 0.1); /* Glow do dock */
+      transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    .track-info {
+      display: flex; flex-direction: column; gap: 6px;
+      min-width: 140px; border-right: 1px solid rgba(255,255,255,0.1);
+      padding-right: 24px; pointer-events: none;
+    }
+
+    .track-name {
+      font-size: 15px; font-weight: 800; color: #fff;
+      letter-spacing: 0.08em; text-shadow: 0 0 15px rgba(255,255,255,0.3);
+    }
+
+    .track-status {
+      font-family: ui-monospace, monospace; font-size: 10px; font-weight: 600;
+      color: var(--accent); letter-spacing: 0.15em;
+    }
+
+    /* Botões de Controle Metálicos */
+    .controls-wrapper { display: flex; gap: 16px; align-items: center; }
+
+    .btn-metal {
+      position: relative; width: 52px; height: 52px; border-radius: 50%;
+      border: none; cursor: pointer; outline: none;
+      display: flex; align-items: center; justify-content: center;
+      
+      background: linear-gradient(135deg, var(--metal-light) 0%, var(--metal-dark) 100%);
+      box-shadow: 
+        inset 0 2px 2px rgba(255,255,255,0.2), 
+        inset 0 -2px 4px rgba(0,0,0,0.5),
+        0 6px 16px rgba(0,0,0,0.6);
+      transition: all 0.2s ease;
+    }
+
+    .btn-metal::after {
+      content: ''; position: absolute; inset: 2px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(0,0,0,0.4));
+      z-index: 1; pointer-events: none;
+    }
+
+    .btn-metal svg {
+      width: 20px; height: 20px; fill: #fff; z-index: 2;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+      transition: fill 0.3s, filter 0.3s;
+    }
+
+    .btn-metal:hover { 
+      transform: translateY(-2px); 
+      box-shadow: inset 0 2px 2px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.4), 0 10px 20px rgba(0, 229, 255, 0.25); 
+    }
+    .btn-metal:active { transform: translateY(1px); box-shadow: inset 0 2px 8px rgba(0,0,0,0.8); }
+    
+    .btn-metal.active svg { fill: var(--accent); filter: drop-shadow(0 0 10px var(--accent)); }
+
+    @media (max-width: 600px) {
+      .premium-dock { width: 92%; bottom: 30px; padding: 14px 20px; gap: 16px; justify-content: space-between; }
+      .track-info { min-width: auto; padding-right: 12px; }
+      .btn-metal { width: 48px; height: 48px; }
+    }
+  </style>
+</head>
+
+<body>
+  <video id="bg-video" autoplay loop muted playsinline crossorigin="anonymous">
+    <source src="video01.mp4" type="video/mp4">
+  </video>
+  
+  <div id="video-overlay"></div>
+
+  <canvas id="c"></canvas>
+
+  <div class="hud-top">
+    <div class="title">HIGH-FIDELITY // VOCAL ENGINE</div>
+    <div class="title" id="meter">FREQ: 0.00 Hz</div>
+  </div>
+
+  <div class="premium-dock">
+    <div class="track-info">
+      <span class="track-name">VOICE LINK</span>
+      <span class="track-status" id="status">Aguardando...</span>
+    </div>
+    
+    <div class="controls-wrapper">
+      <button id="playBtn" class="btn-metal" title="Play">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button id="pauseBtn" class="btn-metal" title="Pause">
+        <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+<script>
+/**
+ * SENIOR ARCHITECTURE - HI-FI AUDIO & QUANTUM FLUID VISUALIZER
+ * Foco absoluto em Fidelidade de Voz, Matemática de Splines e Performance.
+ */
+(() => {
+  // === CONFIGURAÇÃO DO ÁUDIO ===
+  // Substitua pela URL do seu arquivo de voz (alta qualidade recomendada: wav ou mp3 320kbps)
+  const AUDIO_URL = 'voz01.wav'; 
+  
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: true }); // Alpha true necessário para o vídeo aparecer
+
+  const statusEl = document.getElementById('status');
+  const meterEl  = document.getElementById('meter');
+  const playBtn  = document.getElementById('playBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+
+  // Ajuste de Resolução (Anti-aliasing nativo)
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize, { passive: true });
+  resize();
+
+  // === ENGINE DE ÁUDIO HI-FI ===
+  let audioCtx, analyser, mediaEl, sourceNode, dataArray, freqBins;
+  let isPlaying = false, isInitialized = false;
+
+  const BINS = 120; // Reduzido ligeiramente para fluidez das curvas
+  const SMOOTH = 0.88; // Suavidade extra para a voz não "tremer" visualmente
+  let smoothVals = new Array(BINS).fill(0);
+
+  function initAudioSystem() {
+    if (isInitialized) return;
+    
+    // Instanciação Hi-Fi (latencyHint garante prioridade de processamento no SO)
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    analyser = audioCtx.createAnalyser();
+    
+    // fftSize alto (4096) = Alta Definição na separação de frequências vocais
+    analyser.fftSize = 4096; 
+    analyser.smoothingTimeConstant = 0.0; 
+
+    const len = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(len);
+
+    // Mapeamento focado no espectro vocal (aprox. 85Hz a 8000Hz para clareza extrema)
+    freqBins = [];
+    const nyq = audioCtx.sampleRate / 2;
+    const minLog = Math.log10(60); 
+    const maxLog = Math.log10(12000);
+
+    for (let i = 0; i < BINS; i++) {
+      const hz0 = Math.pow(10, minLog + (maxLog - minLog) * (i / BINS));
+      const hz1 = Math.pow(10, minLog + (maxLog - minLog) * ((i + 1) / BINS));
+      const b0 = Math.floor(hz0 / nyq * len);
+      const b1 = Math.max(b0 + 1, Math.floor(hz1 / nyq * len));
+      freqBins.push([b0, Math.min(len - 1, b1)]);
+    }
+
+    mediaEl = new Audio();
+    mediaEl.crossOrigin = "anonymous";
+    mediaEl.src = AUDIO_URL;
+    mediaEl.loop = true;
+
+    // Conexão Direta (Lossless / Sem filtros intermediários)
+    sourceNode = audioCtx.createMediaElementSource(mediaEl);
+    sourceNode.connect(analyser);
+    analyser.connect(audioCtx.destination); 
+
+    mediaEl.addEventListener('playing', () => {
+      isPlaying = true; statusEl.textContent = 'ONLINE // HI-FI';
+      playBtn.classList.add('active'); pauseBtn.classList.remove('active');
+    });
+
+    mediaEl.addEventListener('pause', () => {
+      isPlaying = false; statusEl.textContent = 'STANDBY';
+      playBtn.classList.remove('active'); pauseBtn.classList.add('active');
+    });
+
+    isInitialized = true;
+  }
+
+  playBtn.addEventListener('click', async () => {
+    if (!isInitialized) initAudioSystem();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    mediaEl.play();
+  });
+
+  pauseBtn.addEventListener('click', () => { if (mediaEl && isPlaying) mediaEl.pause(); });
+
+  // === MOTOR GRÁFICO (FLUID SPLINES & PARTICLES) ===
+  const particles = Array.from({ length: 80 }, () => ({
+    angle: Math.random() * Math.PI * 2,
+    radius: Math.random(),
+    speed: 0.001 + Math.random() * 0.003,
+    size: Math.random() * 2.5 + 0.5
+  }));
+
+  // Função para desenhar curvas suaves (Catmull-Rom para Bézier)
+  function drawFluidRing(cx, cy, radius, values, color, glow, multiplier, time) {
+    ctx.beginPath();
+    const points = [];
+    
+    // Calcula os pontos baseados nas frequências
+    for (let i = 0; i < BINS; i++) {
+      const a = (i / BINS) * Math.PI * 2 - Math.PI / 2;
+      // Adiciona um micro-movimento senoide para parecer vivo mesmo sem áudio
+      const breathing = Math.sin(time * 2 + a * 4) * 2; 
+      const r = radius + values[i] * multiplier + breathing;
+      points.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    }
+
+    // Algoritmo de suavização geométrica (fechando o círculo perfeitamente)
+    ctx.moveTo((points[BINS-1].x + points[0].x)/2, (points[BINS-1].y + points[0].y)/2);
+    for (let i = 0; i < BINS; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % BINS];
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 25;
+    ctx.stroke();
+    ctx.shadowBlur = 0; // Reset para performance
+  }
+
+  // === RENDER LOOP (60 FPS Otimizado) ===
+  let t = 0;
+  function loop() {
+    t += 0.01;
+    const W = innerWidth, H = innerHeight;
+    
+    // Com vídeo de fundo, DEBEMOS usar clearRect (transparência real)
+    ctx.clearRect(0, 0, W, H);
+
+    let energy = 0;
+    const currentVals = new Array(BINS).fill(0);
+
+    if (analyser && isPlaying) {
+      analyser.getByteFrequencyData(dataArray);
+      for (let i = 0; i < BINS; i++) {
+        const [b0, b1] = freqBins[i];
+        let sum = 0, n = 0;
+        for (let b = b0; b < b1; b++) { sum += dataArray[b]; n++; }
+        
+        // Curva de compressão visual (foca nas frequências médias da voz)
+        let norm = (n ? sum / n : 0) / 255;
+        norm = Math.pow(norm, 1.5); 
+        
+        smoothVals[i] = smoothVals[i] * SMOOTH + norm * (1 - SMOOTH);
+        currentVals[i] = smoothVals[i];
+      }
+      energy = currentVals.reduce((a, b) => a + b, 0) / BINS;
+      meterEl.textContent = `PWR: ${(energy * 500).toFixed(1)} dB`;
+    } else {
+      // Idle mode fading
+      for (let i = 0; i < BINS; i++) smoothVals[i] *= 0.96;
+      energy = 0;
+      meterEl.textContent = `STANDBY`;
+    }
+
+    const cx = W / 2, cy = H / 2 - 20;
+    const baseR = Math.min(W, H) * 0.22;
+
+    // 1. Anel Interno (Aura do Core)
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseR - 20, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0, 229, 255, ${0.05 + energy * 0.2})`;
+    ctx.fill();
+
+    // 2. Espectro Fluido Traseiro (Roxo - Frequências Graves/Médias)
+    drawFluidRing(cx, cy, baseR, smoothVals, `rgba(177, 0, 255, 0.8)`, '#b100ff', 90, t * 0.8);
+    
+    // 3. Espectro Fluido Frontal (Ciano - Frequências Agudas/Detalhes da Voz)
+    // Invertemos o array para criar simetria e cruzamentos hi-tech
+    const reversedVals = [...smoothVals].reverse();
+    drawFluidRing(cx, cy, baseR + 5, reversedVals, `rgba(0, 229, 255, 0.9)`, '#00e5ff', 120, -t);
+
+    // 4. Partículas Orbitais (Reagem à energia da voz)
+    ctx.fillStyle = '#fff';
+    for (const p of particles) {
+      p.angle += p.speed * (1 + energy * 5);
+      // O raio expande sutilmente quando a pessoa fala
+      const dynamicRadius = baseR + 30 + (p.radius * 100) + (energy * 150 * p.radius);
+      
+      const px = cx + Math.cos(p.angle) * dynamicRadius;
+      const py = cy + Math.sin(p.angle) * dynamicRadius;
+      
+      ctx.beginPath();
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 10;
+      ctx.arc(px, py, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
